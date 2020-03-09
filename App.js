@@ -1,62 +1,63 @@
-import * as React from 'react';
-import { Platform, StatusBar, StyleSheet, View } from 'react-native';
-import { SplashScreen } from 'expo';
-import * as Font from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
-import { NavigationContainer } from '@react-navigation/native';
+import React, {useRef, useState, useEffect} from 'react';
+import { StyleSheet, View } from 'react-native';
+import { NavigationContainer, useLinking } from "@react-navigation/native";
 import { createStackNavigator } from '@react-navigation/stack';
-
-import BottomTabNavigator from './navigation/BottomTabNavigator';
-import useLinking from './navigation/useLinking';
+import {SCREEN_LIST, STACK_LIST} from "./constants/screen-mapping";
+import {ModalStack} from "./navigation/stack-navigators/modal-stack";
+import {LoginStack} from "./navigation/stack-navigators/login-stack";
+import {enableScreens} from "react-native-screens";
 
 const Stack = createStackNavigator();
 
+enableScreens();
+
+
 export default function App(props) {
-  const [isLoadingComplete, setLoadingComplete] = React.useState(false);
-  const [initialNavigationState, setInitialNavigationState] = React.useState();
-  const containerRef = React.useRef();
-  const { getInitialState } = useLinking(containerRef);
-
-  // Load any resources or data that we need prior to rendering the app
-  React.useEffect(() => {
-    async function loadResourcesAndDataAsync() {
-      try {
-        SplashScreen.preventAutoHide();
-
-        // Load our initial navigation state
-        setInitialNavigationState(await getInitialState());
-
-        // Load fonts
-        await Font.loadAsync({
-          ...Ionicons.font,
-          'space-mono': require('./assets/fonts/SpaceMono-Regular.ttf'),
-        });
-      } catch (e) {
-        // We might want to provide this error information to an error reporting service
-        console.warn(e);
-      } finally {
-        setLoadingComplete(true);
-        SplashScreen.hide();
-      }
+  const ref = useRef(null);
+  const { getInitialState } = useLinking(ref, {
+    prefixes: ["xyx://"],
+    config: {
+      [SCREEN_LIST.storyScreen]: "story/:slug"
     }
+  });
 
-    loadResourcesAndDataAsync();
-  }, []);
+  const [initialState, setInitialState] = useState();
 
-  if (!isLoadingComplete && !props.skipLoadingScreen) {
-    return null;
-  } else {
-    return (
+  useEffect(() => {
+    Promise.race([
+      getInitialState(),
+      new Promise(resolve =>
+          // Timeout in 150ms if `getInitialState` doesn't resolve
+          // Workaround for https://github.com/facebook/react-native/issues/25675
+          setTimeout(resolve, 150)
+      )
+    ])
+        .catch(e => {
+          console.error(e);
+        })
+        .then(state => {
+          if (state !== undefined) {
+            setInitialState(state);
+          }
+
+        });
+  }, [getInitialState]);
+
+  return (
       <View style={styles.container}>
-        {Platform.OS === 'ios' && <StatusBar barStyle="default" />}
-        <NavigationContainer ref={containerRef} initialState={initialNavigationState}>
-          <Stack.Navigator>
-            <Stack.Screen name="Root" component={BottomTabNavigator} />
+        <NavigationContainer initialState={initialState} ref={ref}>
+          <Stack.Navigator
+              screenOptions={{
+                headerShown: false
+              }}
+              initialRouteName={STACK_LIST.modalStack}
+          >
+            <Stack.Screen name={STACK_LIST.modalStack} component={ModalStack} />
+            <Stack.Screen name={STACK_LIST.loginStack} component={LoginStack} />
           </Stack.Navigator>
         </NavigationContainer>
       </View>
     );
-  }
 }
 
 const styles = StyleSheet.create({
